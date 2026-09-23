@@ -17,6 +17,20 @@
     </div>
     
     <div class="toolbar-right">
+      <el-dropdown @command="handleTemplateCommand">
+        <el-button type="primary" plain size="small">
+          模板<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="load">
+              从模板新建<span v-if="store.isDirty" class="dirty-dot" title="当前画布有未保存的改动" />
+            </el-dropdown-item>
+            <el-dropdown-item command="save">保存为模板</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-divider direction="vertical" />
       <el-select v-model="scaleValue" size="small" style="width: 90px" @change="changeScale">
         <el-option v-for="s in scales" :key="s" :label="`${s * 100}%`" :value="s" />
       </el-select>
@@ -34,6 +48,7 @@
       </el-dropdown>
       <el-button type="danger" size="small" @click="clearCanvas">清空</el-button>
     </div>
+    <TemplateDialog ref="templateDialogRef" />
   </div>
 </template>
 
@@ -41,6 +56,7 @@
 import { ref, watch } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import TemplateDialog from '../Templates/TemplateDialog.vue'
 
 const emit = defineEmits(['export'])
 const store = useCanvasStore()
@@ -49,8 +65,16 @@ const width = ref(store.canvasWidth)
 const height = ref(store.canvasHeight)
 const scaleValue = ref(store.scale)
 const scales = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+const templateDialogRef = ref(null)
 
 watch(() => store.scale, (val) => { scaleValue.value = val })
+// 载入模板后画布尺寸会整体替换，同步顶部的尺寸输入框
+watch(() => store.canvasWidth, (val) => { width.value = val })
+watch(() => store.canvasHeight, (val) => { height.value = val })
+
+const handleTemplateCommand = (command) => {
+  templateDialogRef.value?.open(command === 'save' ? 'save' : 'load')
+}
 
 const applySize = () => {
   const oldWidth = store.canvasPixelWidth
@@ -111,4 +135,14 @@ const clearCanvas = () => {
 }
 
 .toolbar-right { display: flex; align-items: center; gap: 12px; }
+
+.dirty-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #e6a23c;
+  vertical-align: middle;
+}
 </style>

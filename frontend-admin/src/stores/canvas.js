@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const MM_TO_DOT = 8
 
@@ -11,6 +11,48 @@ export const useCanvasStore = defineStore('canvas', () => {
   const selectedElementId = ref(null)
   const selectedElementIds = ref([])
   let elementIdCounter = 0
+
+  // 未保存改动追踪：画布尺寸或元件变化都会产生一个新的修订号，
+  // 保存模板 / 载入模板后把基准修订号同步为当前值即为“无改动”。
+  const revision = ref(0)
+  const savedRevision = ref(0)
+
+  watch(
+    [canvasWidth, canvasHeight, elements],
+    () => { revision.value++ },
+    { deep: true, flush: 'sync' }
+  )
+
+  const isDirty = computed(() => revision.value !== savedRevision.value)
+
+  function markSaved() {
+    savedRevision.value = revision.value
+  }
+
+  // 把当前画布的完整内容（尺寸、元件的摆放与样式、表格文字等）序列化为快照
+  function captureSnapshot() {
+    return {
+      canvasWidth: canvasWidth.value,
+      canvasHeight: canvasHeight.value,
+      elements: JSON.parse(JSON.stringify(elements.value))
+    }
+  }
+
+  // 用快照整体替换画布内容
+  function loadState(state) {
+    canvasWidth.value = state.canvasWidth
+    canvasHeight.value = state.canvasHeight
+    // 恢复的元件统一重新分配 id，既兼容模板里缺失 id 的情况，也避免与当前画布元件冲突
+    elements.value = (state.elements || []).map(el => {
+      const copy = { ...el }
+      delete copy.id
+      return { id: `element_${++elementIdCounter}`, ...copy }
+    })
+    selectedElementId.value = null
+    selectedElementIds.value = []
+
+    markSaved()
+  }
 
   const canvasPixelWidth = computed(() => canvasWidth.value * MM_TO_DOT)
   const canvasPixelHeight = computed(() => canvasHeight.value * MM_TO_DOT)
@@ -173,6 +215,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     canvasPixelHeight,
     selectedElement,
     selectedElements,
+    isDirty,
     setCanvasSize,
     setScale,
     addElement,
@@ -183,6 +226,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     alignElements,
     duplicateElement,
     clearCanvas,
+    captureSnapshot,
+    loadState,
+    markSaved,
     MM_TO_DOT
   }
 })
