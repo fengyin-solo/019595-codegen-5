@@ -17,6 +17,19 @@
     </div>
     
     <div class="toolbar-right">
+      <el-dropdown @command="handleNew">
+        <el-button type="primary" size="small">
+          新建<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="blank">空白标签</el-dropdown-item>
+            <el-dropdown-item command="template">从模板新建</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-button size="small" @click="templateDialogVisible = true">模板库</el-button>
+      <el-divider direction="vertical" />
       <el-select v-model="scaleValue" size="small" style="width: 90px" @change="changeScale">
         <el-option v-for="s in scales" :key="s" :label="`${s * 100}%`" :value="s" />
       </el-select>
@@ -34,6 +47,8 @@
       </el-dropdown>
       <el-button type="danger" size="small" @click="clearCanvas">清空</el-button>
     </div>
+
+    <TemplateLibrary v-model="templateDialogVisible" />
   </div>
 </template>
 
@@ -41,6 +56,7 @@
 import { ref, watch } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import TemplateLibrary from '@/components/Templates/TemplateLibrary.vue'
 
 const emit = defineEmits(['export'])
 const store = useCanvasStore()
@@ -49,8 +65,14 @@ const width = ref(store.canvasWidth)
 const height = ref(store.canvasHeight)
 const scaleValue = ref(store.scale)
 const scales = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+const templateDialogVisible = ref(false)
 
 watch(() => store.scale, (val) => { scaleValue.value = val })
+// 新建空白或载入模板后，尺寸输入框同步为当前画布尺寸
+watch(() => [store.canvasWidth, store.canvasHeight], ([w, h]) => {
+  width.value = w
+  height.value = h
+})
 
 const applySize = () => {
   const oldWidth = store.canvasPixelWidth
@@ -76,6 +98,29 @@ const applySize = () => {
 
 const changeScale = (val) => store.setScale(val)
 const handleExport = (type) => emit('export', type)
+
+// 新建前若有未保存改动，先确认
+const confirmUnsavedChanges = () => {
+  if (!store.isDirty) return Promise.resolve(true)
+  return ElMessageBox.confirm(
+    '当前标签还有未保存的改动，新建后将丢失。是否继续？',
+    '有未保存的改动',
+    { confirmButtonText: '继续新建', cancelButtonText: '取消', type: 'warning' }
+  ).then(() => true).catch(() => false)
+}
+
+const handleNew = async (command) => {
+  if (command === 'template') {
+    // 是否有未保存改动，统一在模板库中点击“载入”时再确认
+    templateDialogVisible.value = true
+    return
+  }
+
+  const proceed = await confirmUnsavedChanges()
+  if (!proceed) return
+  store.newBlankLabel()
+  ElMessage.success('已新建空白标签')
+}
 
 const clearCanvas = () => {
   ElMessageBox.confirm('确定要清空画布吗？', '提示', { type: 'warning' })
